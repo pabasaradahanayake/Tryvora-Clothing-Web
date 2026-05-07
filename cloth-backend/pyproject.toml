@@ -1,0 +1,32 @@
+[project]
+name = "clothproject"
+version = "0.1.0"
+description = "Virtual Try-On Backend — MobileNetV2 + MediaPipe + OpenCV"
+requires-python = ">=3.13"
+dependencies = [
+    # ── Web framework ─────────────────────────────────────────────────────────
+    "fastapi[standard]",
+    "uvicorn",
+    "python-multipart",      # required for File/Form uploads
+    # ── Database & Auth ───────────────────────────────────────────────────────
+    "sqlalchemy",
+    "psycopg2-binary",
+    "python-dotenv",
+    "pyjwt",
+    "pwdlib[argon2]",
+    "email-validator",
+    # ── AI / Computer Vision ──────────────────────────────────────────────────
+    "tensorflow>=2.15",
+    "mediapipe>=0.10",
+    "opencv-python>=4.9",
+    "pillow>=10.0",
+    "numpy>=1.26",
+    # ── Training & Evaluation helpers ─────────────────────────────────────────
+    "matplotlib>=3.8",
+    "scikit-learn>=1.4",
+    "rich>=13.0",            # beautiful terminal output in train/evaluate scripts
+    # ── Testing ───────────────────────────────────────────────────────────────
+    "pytest",
+    "httpx",
+    "anyio[trio]",
+]

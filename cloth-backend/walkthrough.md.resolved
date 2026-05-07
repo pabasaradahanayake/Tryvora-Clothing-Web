@@ -1,0 +1,45 @@
+# Cloth Backend — Virtual Try-On Implementation Walkthrough
+
+## About the Built
+
+A complete AI virtual try-on backend built on top of the existing FastAPI + JWT auth skeleton.
+
+---
+
+## How to Use
+
+### Run Order
+
+```
+1. Add dataset images to:
+     dataset/train/<category>/
+     dataset/val/<category>/
+
+2. Train the model (once):
+     python model/train.py
+     python model/evaluate.py   <- generates plots for your report
+
+3. Start the server:
+     uvicorn app.main:app --reload
+
+4. Test with test_analyze.http (register -> login -> POST /analyze)
+```
+
+### API Response Example
+
+```json
+{
+  "category": "shirt",
+  "confidence": 0.94,
+  "low_confidence": false,
+  "landmarks_found": true,
+  "shoulder_width_cm": 44.0,
+  "chest_estimate_cm": 98.0,
+  "waist_estimate_cm": 82.0,
+  "hip_width_cm": 41.0,
+  "recommended_size": "M",
+  "size_basis": "chest",
+  "preview_image_url": "/static/output/result_abc123.png",
+  "measurement_note": "Body measurements are approximate estimates (+-5 cm)..."
+}
+```

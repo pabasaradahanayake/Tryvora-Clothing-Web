@@ -1,0 +1,39 @@
+{
+  "items": [
+    {
+      "id": 1,
+      "filename": "dress",
+      "name": "Dress",
+      "category": "full_body",
+      "image_url": "/static/clothing_pngs/dress.png"
+    },
+    {
+      "id": 2,
+      "filename": "jacket",
+      "name": "Jacket",
+      "category": "upper_body",
+      "image_url": "/static/clothing_pngs/jacket.png"
+    },
+    {
+      "id": 3,
+      "filename": "pants",
+      "name": "Pants",
+      "category": "lower_body",
+      "image_url": "/static/clothing_pngs/pants.png"
+    },
+    {
+      "id": 4,
+      "filename": "shirt",
+      "name": "Shirt",
+      "category": "upper_body",
+      "image_url": "/static/clothing_pngs/shirt.png"
+    },
+    {
+      "id": 5,
+      "filename": "tshirt",
+      "name": "Tshirt",
+      "category": "upper_body",
+      "image_url": "/static/clothing_pngs/tshirt.png"
+    }
+  ]
+}

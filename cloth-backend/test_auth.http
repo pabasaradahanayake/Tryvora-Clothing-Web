@@ -1,0 +1,25 @@
+# Test your FastAPI endpoints
+
+### Register new user
+POST http://localhost:8000/register
+Content-Type: application/json
+
+{
+  "username": "test_user",
+  "email": "testuser@example.com",
+  "password": "123456"
+}
+
+###
+
+### Login and get JWT token
+POST http://localhost:8000/token
+Content-Type: application/x-www-form-urlencoded
+
+username=dilshan&password=123
+
+###
+
+### Get current user profile (replace TOKEN_HERE)
+GET http://localhost:8000/users/me
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJkaWxzaGFuIiwiZXhwIjoxNzcyMjI3ODk2fQ.Zcz9Oz4W1_VYKENJ7aP0d2XVIwerMY4y5GHrvkl16Jg

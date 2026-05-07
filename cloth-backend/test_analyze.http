@@ -1,0 +1,60 @@
+### /analyze — Virtual Try-On (Auth Required)
+
+# ── Step 1: Register ───────────────────────────────────────────────────────────
+POST http://localhost:8000/register
+Content-Type: application/json
+
+{
+  "username": "testuser",
+  "email": "test@example.com",
+  "password": "TestPass123"
+}
+
+###
+
+# ── Step 2: Login → get token ──────────────────────────────────────────────────
+POST http://localhost:8000/token
+Content-Type: application/x-www-form-urlencoded
+
+username=testuser&password=TestPass123
+
+###
+
+# ── Step 3: Analyse image (paste your token below) ────────────────────────────
+# Replace <TOKEN> with the access_token from Step 2
+# Replace test_shirt.jpg with any image filename in your project root
+POST http://localhost:8000/analyze
+Authorization: Bearer <TOKEN>
+Content-Type: multipart/form-data; boundary=----Boundary
+
+------Boundary
+Content-Disposition: form-data; name="file"; filename="test_shirt.jpg"
+Content-Type: image/jpeg
+
+< ./test_shirt.jpg
+------Boundary
+Content-Disposition: form-data; name="real_height_cm"
+
+175
+------Boundary--
+
+###
+
+# ── Step 4: Analyse without height (test fallback) ───────────────────────────
+POST http://localhost:8000/analyze
+Authorization: Bearer <TOKEN>
+Content-Type: multipart/form-data; boundary=----Boundary2
+
+------Boundary2
+Content-Disposition: form-data; name="file"; filename="test_pants.jpg"
+Content-Type: image/jpeg
+
+< ./test_pants.jpg
+------Boundary2--
+
+###
+
+# ── Step 5: Check overlay result in browser ───────────────────────────────────
+# After a successful /analyze, copy the preview_image_url value and open:
+# http://localhost:8000/static/output/<result_filename>.png
+GET http://localhost:8000/static/output/PASTE_RESULT_FILENAME_HERE.png

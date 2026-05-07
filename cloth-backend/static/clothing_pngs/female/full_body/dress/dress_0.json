@@ -1,0 +1,18 @@
+{
+    "LEFT_SHOULDER": [
+        501,
+        24
+    ],
+    "RIGHT_SHOULDER": [
+        96,
+        29
+    ],
+    "LEFT_KNEE": [
+        476,
+        1100
+    ],
+    "RIGHT_KNEE": [
+        126,
+        1099
+    ]
+}

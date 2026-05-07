@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Clothing Keypoint Annotator</title>
+    <style>
+        body { font-family: system-ui, sans-serif; max-width: 1000px; margin: 0 auto; padding: 20px; text-align: center; }
+        #canvas-container { position: relative; display: inline-block; margin-top: 20px; border: 1px dashed #ccc; background: #f9f9f9; }
+        canvas { display: block; max-width: 100%; height: auto; cursor: crosshair; }
+        .instructions { background: #e3f2fd; padding: 15px; border-radius: 8px; margin-bottom: 20px; text-align: left; }
+        .point { position: absolute; width: 10px; height: 10px; background: red; border-radius: 50%; transform: translate(-50%, -50%); pointer-events: none; }
+        pre { background: #2d2d2d; color: #fff; padding: 15px; border-radius: 8px; text-align: left; overflow-x: auto; }
+        button { padding: 10px 20px; font-size: 16px; cursor: pointer; background: #007bff; color: white; border: none; border-radius: 4px; margin: 5px; }
+        button:hover { background: #0056b3; }
+    </style>
+</head>
+<body>
+
+    <h1>👕 Clothing Keypoint Annotator</h1>
+    
+    <div class="instructions">
+        <h3>How to use:</h3>
+        <ol>
+            <li>Select a clothing transparent PNG file (e.g. <code>pants.png</code>)</li>
+            <li>Click the requested points on the image in order.</li>
+            <li>Copy the generated JSON and save it as <code>pants.json</code> in the same folder as the PNG.</li>
+        </ol>
+    </div>
+
+    <div>
+        <input type="file" id="imageLoader" accept="image/png" />
+        <br><br>
+        <label>Configuration Type:</label>
+        <select id="pointMode" onchange="toggleMode()">
+            <option value="4">4 Points (Perspective Warp - Pants/Skirts)</option>
+            <option value="2">2 Points (Shape Preserving - Shirts)</option>
+        </select>
+        <br><br>
+        <label>Select joints you want to annotate on this clothing:</label><br>
+        <div id="pointSelectors" style="margin: 10px 0;">
+            <select id="pt1">
+                <option value="LEFT_SHOULDER">Left Shoulder (Right side of image)</option>
+                <option value="RIGHT_SHOULDER">Right Shoulder (Left side of image)</option>
+                <option value="LEFT_HIP" selected>Left Hip (Right side of image)</option>
+                <option value="RIGHT_HIP">Right Hip (Left side of image)</option>
+            </select>
+            <select id="pt2">
+                <option value="LEFT_SHOULDER">Left Shoulder (Right side of image)</option>
+                <option value="RIGHT_SHOULDER">Right Shoulder (Left side of image)</option>
+                <option value="LEFT_HIP">Left Hip (Right side of image)</option>
+                <option value="RIGHT_HIP" selected>Right Hip (Left side of image)</option>
+            </select>
+            <select id="pt3" class="four-point-only">
+                <option value="LEFT_HIP">Left Hip (Right side of image)</option>
+                <option value="LEFT_KNEE">Left Knee (Right side of image)</option>
+                <option value="LEFT_ANKLE" selected>Left Ankle (Right side of image)</option>
+                <option value="RIGHT_HIP">Right Hip (Left side of image)</option>
+                <option value="RIGHT_KNEE">Right Knee (Left side of image)</option>
+                <option value="RIGHT_ANKLE">Right Ankle (Left side of image)</option>
+            </select>
+            <select id="pt4" class="four-point-only">
+                <option value="LEFT_HIP">Left Hip (Right side of image)</option>
+                <option value="LEFT_KNEE">Left Knee (Right side of image)</option>
+                <option value="LEFT_ANKLE">Left Ankle (Right side of image)</option>
+                <option value="RIGHT_HIP">Right Hip (Left side of image)</option>
+                <option value="RIGHT_KNEE">Right Knee (Left side of image)</option>
+                <option value="RIGHT_ANKLE" selected>Right Ankle (Left side of image)</option>
+            </select>
+        </div>
+        <button onclick="resetAnnotator()">Set Points & Start</button>
+    </div>
+
+    <h3 id="statusText" style="color: #d32f2f;">Please upload an image...</h3>
+
+    <div id="canvas-container">
+        <canvas id="imageCanvas"></canvas>
+    </div>
+
+    <h3>Output JSON:</h3>
+    <pre id="jsonOutput">{}</pre>
+    <button onclick="copyJSON()">Copy to Clipboard</button>
+
+    <script>
+        const canvas = document.getElementById('imageCanvas');
+        const ctx = canvas.getContext('2d');
+        const container = document.getElementById('canvas-container');
+        const statusText = document.getElementById('statusText');
+        const jsonOutput = document.getElementById('jsonOutput');
+        
+        let img = new Image();
+        let points = [];
+        let requiredPoints = [];
+
+        function toggleMode() {
+            const mode = document.getElementById('pointMode').value;
+            const extras = document.querySelectorAll('.four-point-only');
+            extras.forEach(el => el.style.display = (mode === "4") ? "inline-block" : "none");
+            
+            if (mode === "2") {
+                document.getElementById('pt1').value = "LEFT_SHOULDER";
+                document.getElementById('pt2').value = "RIGHT_SHOULDER";
+            }
+            resetAnnotator();
+        }
+
+        // Handle image upload
+        document.getElementById('imageLoader').addEventListener('change', function(e) {
+            const reader = new FileReader();
+            reader.onload = function(event) {
+                img.onload = function() {
+                    canvas.width = img.width;
+                    canvas.height = img.height;
+                    resetAnnotator();
+                }
+                img.src = event.target.result;
+            }
+            if(e.target.files[0]) reader.readAsDataURL(e.target.files[0]);
+        });
+
+        function resetAnnotator() {
+            points = [];
+            // Remove old red dots
+            document.querySelectorAll('.point').forEach(p => p.remove());
+            
+            const mode = document.getElementById('pointMode').value;
+            requiredPoints = [
+                document.getElementById('pt1').value,
+                document.getElementById('pt2').value
+            ];
+            
+            if (mode === "4") {
+                requiredPoints.push(
+                    document.getElementById('pt3').value,
+                    document.getElementById('pt4').value
+                );
+            }
+            
+            if (!img.src) return;
+            
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.drawImage(img, 0, 0);
+            
+            updateStatus();
+            updateJSON();
+        }
+
+        canvas.addEventListener('click', function(event) {
+            if (points.length >= requiredPoints.length) return;
+
+            const rect = canvas.getBoundingClientRect();
+            // Scale correctly if canvas CSS size differs from intrinsic size
+            const scaleX = canvas.width / rect.width;
+            const scaleY = canvas.height / rect.height;
+
+            const x = Math.round((event.clientX - rect.left) * scaleX);
+            const y = Math.round((event.clientY - rect.top) * scaleY);
+
+            points.push([x, y]);
+
+            // Draw dot on UI
+            const dot = document.createElement('div');
+            dot.className = 'point';
+            dot.style.left = ((event.clientX - rect.left)) + 'px';
+            dot.style.top = ((event.clientY - rect.top)) + 'px';
+            container.appendChild(dot);
+
+            updateStatus();
+            updateJSON();
+        });
+
+        function updateStatus() {
+            if (points.length < requiredPoints.length) {
+                statusText.innerText = `Click on the clothing to place: ${requiredPoints[points.length]}`;
+                statusText.style.color = "#d32f2f";
+            } else {
+                statusText.innerText = "All points mapped! Copy the JSON.";
+                statusText.style.color = "#388e3c";
+            }
+        }
+
+        function updateJSON() {
+            let data = {};
+            for (let i = 0; i < points.length; i++) {
+                data[requiredPoints[i]] = points[i];
+            }
+            jsonOutput.innerText = JSON.stringify(data, null, 4);
+        }
+
+        function copyJSON() {
+            navigator.clipboard.writeText(jsonOutput.innerText);
+            alert("Copied!");
+        }
+    </script>
+</body>
+</html>
