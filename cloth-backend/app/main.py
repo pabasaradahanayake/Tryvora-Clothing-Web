@@ -1,7 +1,8 @@
 from contextlib import asynccontextmanager
 from pathlib import Path
+import shutil
 
-from fastapi import FastAPI
+from fastapi import FastAPI, File, Form, UploadFile, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
@@ -14,6 +15,8 @@ from app.routers.admin import router as admin_router
 # ── Static directories ────────────────────────────────────────────────────────
 STATIC_DIR = Path(__file__).resolve().parent.parent / "static"
 OUTPUT_DIR = STATIC_DIR / "output"
+CLOTHING_DIR = STATIC_DIR / "clothing_pngs"
+
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
 
@@ -83,6 +86,99 @@ app.add_middleware(
 
 # Serve generated overlay images and static clothing PNGs
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
+
+
+@app.get("/clothes")
+def get_clothes():
+    clothes = []
+
+    if not CLOTHING_DIR.exists():
+        return clothes
+
+    for file in CLOTHING_DIR.rglob("*"):
+        if file.is_file() and file.suffix.lower() in [".png", ".jpg", ".jpeg", ".webp"]:
+            relative_path = file.relative_to(CLOTHING_DIR).as_posix()
+            parts = relative_path.split("/")
+
+            gender = parts[0] if len(parts) > 0 else "unknown"
+            category = parts[1] if len(parts) > 1 else "unknown"
+
+            clothes.append(
+                {
+                    "name": file.name,
+                    "gender": gender,
+                    "category": category,
+                    "image_url": f"http://127.0.0.1:8000/static/clothing_pngs/{relative_path}",
+                    "path": relative_path,
+                }
+            )
+
+    return clothes
+
+
+@app.post("/clothes/upload")
+async def upload_cloth(
+    gender: str = Form(...),
+    category: str = Form(...),
+    file: UploadFile = File(...),
+):
+    allowed_extensions = [".png", ".jpg", ".jpeg", ".webp"]
+    file_extension = Path(file.filename).suffix.lower()
+
+    if file_extension not in allowed_extensions:
+        raise HTTPException(
+            status_code=400,
+            detail="Only PNG, JPG, JPEG, and WEBP files are allowed.",
+        )
+
+    safe_gender = gender.strip().lower().replace(" ", "_")
+    safe_category = category.strip().lower().replace(" ", "_")
+    safe_filename = Path(file.filename).name.replace(" ", "_")
+
+    save_dir = CLOTHING_DIR / safe_gender / safe_category
+    save_dir.mkdir(parents=True, exist_ok=True)
+
+    save_path = save_dir / safe_filename
+
+    if save_path.exists():
+        raise HTTPException(
+            status_code=400,
+            detail="A clothing image with this file name already exists.",
+        )
+
+    with save_path.open("wb") as buffer:
+        shutil.copyfileobj(file.file, buffer)
+
+    relative_path = save_path.relative_to(CLOTHING_DIR).as_posix()
+
+    return {
+        "message": "Clothing image uploaded successfully",
+        "name": save_path.name,
+        "gender": safe_gender,
+        "category": safe_category,
+        "image_url": f"http://127.0.0.1:8000/static/clothing_pngs/{relative_path}",
+        "path": relative_path,
+    }
+
+
+@app.delete("/clothes/delete")
+def delete_cloth(path: str):
+    if not path:
+        raise HTTPException(status_code=400, detail="Image path is required.")
+
+    target_path = (CLOTHING_DIR / path).resolve()
+    clothing_root = CLOTHING_DIR.resolve()
+
+    if not str(target_path).startswith(str(clothing_root)):
+        raise HTTPException(status_code=400, detail="Invalid image path.")
+
+    if not target_path.exists() or not target_path.is_file():
+        raise HTTPException(status_code=404, detail="Clothing image not found.")
+
+    target_path.unlink()
+
+    return {"message": "Clothing image deleted successfully"}
+
 
 app.include_router(auth_router)
 app.include_router(analyze_router)

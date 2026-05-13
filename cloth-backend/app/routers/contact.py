@@ -126,3 +126,25 @@ def reply_to_message(
     db.refresh(message)
 
     return message
+
+
+@router.delete("/admin/messages/{message_id}")
+def delete_message(
+    message_id: int,
+    current_user: TokenData = Depends(get_current_user_dep),
+    db: Session = Depends(get_db),
+):
+    user_identity = get_user_identity(current_user)
+
+    if user_identity != ADMIN_USERNAME:
+        raise HTTPException(status_code=403, detail="Not authorized")
+
+    message = db.query(ContactMessage).filter(ContactMessage.id == message_id).first()
+
+    if not message:
+        raise HTTPException(status_code=404, detail="Message not found.")
+
+    db.delete(message)
+    db.commit()
+
+    return {"message": "Message deleted successfully"}
