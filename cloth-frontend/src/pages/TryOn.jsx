@@ -4,53 +4,52 @@ import { useNavigate } from "react-router-dom";
 
 const API_BASE = "http://127.0.0.1:8000";
 
+const UI_CATEGORIES = {
+  male: ["shirt", "tshirt", "pants"],
+  female: ["dress", "skirt"],
+};
+
+const SIZE_OPTIONS = {
+  shirt: ["S", "M", "L", "XL"],
+  tshirt: ["S", "M", "L", "XL"],
+  dress: ["S", "M", "L", "XL"],
+  skirt: ["S", "M", "L", "XL"],
+  pants: ["28", "30", "32", "34", "36"],
+  upper_body: ["S", "M", "L", "XL"],
+  full_body: ["S", "M", "L", "XL"],
+  lower_body: ["28", "30", "32", "34", "36"],
+};
+
+const detectDisplayCategory = (item) => {
+  const name = (item.name || "").toLowerCase();
+  const path = (item.path || "").toLowerCase();
+
+  if (name.includes("tshirt") || path.includes("tshirt")) return "tshirt";
+  if (name.includes("shirt") || path.includes("shirt")) return "shirt";
+  if (name.includes("pants") || path.includes("pants")) return "pants";
+  if (name.includes("dress") || path.includes("dress")) return "dress";
+  if (name.includes("skirt") || path.includes("skirt")) return "skirt";
+
+  if (item.gender === "male" && item.category === "upper_body") return "shirt";
+  if (item.gender === "male" && item.category === "lower_body") return "pants";
+  if (item.gender === "female" && item.category === "full_body") return "dress";
+  if (item.gender === "female" && item.category === "lower_body") return "skirt";
+
+  return item.category;
+};
+
 const getToken = () => {
   let token = localStorage.getItem("token");
   if (!token) return null;
   return token.replace(/"/g, "").trim();
 };
 
-const CATEGORY_CONFIG = {
-  male: {
-    pants: {
-      backendType: "pants",
-      staticPath: "male/lower_body/pants",
-      filePrefix: "pants",
-    },
-    shirt: {
-      backendType: "shirt",
-      staticPath: "male/upper_body/shirt",
-      filePrefix: "shirt",
-    },
-    tshirt: {
-      backendType: "tshirt",
-      staticPath: "male/upper_body/tshirt",
-      filePrefix: "tshirt",
-    },
-  },
-  female: {
-    dress: {
-      backendType: "dress",
-      staticPath: "female/full_body/dress",
-      filePrefix: "dress",
-    },
-    skirts: {
-      backendType: "skirt",
-      staticPath: "female/lower_body/skirt",
-      filePrefix: "skirt",
-    },
-  },
-};
-
-const getCategories = (gender) => {
-  if (!gender) return [];
-  return Object.keys(CATEGORY_CONFIG[gender] || {});
-};
-
-const normalizePath = (path = "") => path.replace(/^\/+/, "").toLowerCase();
+const normalizePath = (path = "") =>
+  path.replace(API_BASE, "").replace(/^\/+/, "").toLowerCase();
 
 function TryOn() {
   const navigate = useNavigate();
+
   const [gender, setGender] = useState("");
   const [category, setCategory] = useState("");
 
@@ -58,16 +57,40 @@ function TryOn() {
   const [preview, setPreview] = useState(null);
 
   const [allClothingOptions, setAllClothingOptions] = useState([]);
+  const [allStaticClothes, setAllStaticClothes] = useState([]);
   const [images, setImages] = useState([]);
   const [selectedItem, setSelectedItem] = useState(null);
 
   const [result, setResult] = useState(null);
+  const [selectedSize, setSelectedSize] = useState("");
   const [loading, setLoading] = useState(false);
   const [loadingOptions, setLoadingOptions] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
   const [showPreviewModal, setShowPreviewModal] = useState(false);
 
-  const categories = useMemo(() => getCategories(gender), [gender]);
+  const staticClothesWithDisplayCategory = useMemo(
+    () =>
+      allStaticClothes.map((item) => ({
+        ...item,
+        displayCategory: detectDisplayCategory(item),
+      })),
+    [allStaticClothes]
+  );
+
+  const categories = useMemo(() => {
+    if (!gender) return [];
+
+    return [
+      ...new Set(
+        staticClothesWithDisplayCategory
+          .filter((item) => item.gender === gender)
+          .filter((item) =>
+            UI_CATEGORIES[gender]?.includes(item.displayCategory)
+          )
+          .map((item) => item.displayCategory)
+      ),
+    ];
+  }, [staticClothesWithDisplayCategory, gender]);
 
   useEffect(() => {
     const loadClothingOptions = async () => {
@@ -82,13 +105,17 @@ function TryOn() {
         setLoadingOptions(true);
         setErrorMessage("");
 
-        const res = await axios.get(`${API_BASE}/analyze/clothing-options`, {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        });
+        const [optionsRes, clothesRes] = await Promise.all([
+          axios.get(`${API_BASE}/analyze/clothing-options`, {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          }),
+          axios.get(`${API_BASE}/clothes`),
+        ]);
 
-        setAllClothingOptions(res.data?.cloths || []);
+        setAllClothingOptions(optionsRes.data?.cloths || []);
+        setAllStaticClothes(clothesRes.data || []);
       } catch (err) {
         const detail = err?.response?.data?.detail;
         setErrorMessage(
@@ -111,36 +138,49 @@ function TryOn() {
       return;
     }
 
-    const cfg = CATEGORY_CONFIG[gender]?.[category];
-    if (!cfg) {
-      setImages([]);
-      setSelectedItem(null);
-      return;
-    }
+    const matched = staticClothesWithDisplayCategory
+      .filter(
+        (item) =>
+          item.gender === gender &&
+          item.displayCategory === category &&
+          UI_CATEGORIES[gender]?.includes(item.displayCategory)
+      )
+      .map((staticItem, index) => {
+        const staticPath = normalizePath(
+          staticItem.path
+            ? `static/clothing_pngs/${staticItem.path}`
+            : staticItem.image_url
+        );
 
-    const expectedPrefix = normalizePath(`static/clothing_pngs/${cfg.staticPath}/`);
+        const backendItem = allClothingOptions.find((option) => {
+          const optionPath = normalizePath(option?.image_url || "");
+          return optionPath === staticPath || optionPath.endsWith(staticPath);
+        });
 
-    const matched = allClothingOptions
-      .filter((item) => item?.sex === gender && item?.type === cfg.backendType)
-      .filter((item) => normalizePath(item?.image_url).startsWith(expectedPrefix))
-      .sort((a, b) => {
-        const ai = Number.parseInt(a.name?.match(/(\d+)$/)?.[1] ?? "0", 10);
-        const bi = Number.parseInt(b.name?.match(/(\d+)$/)?.[1] ?? "0", 10);
-        return ai - bi;
-      })
-      .map((item) => ({
-        id: item.id,
-        name: item.name,
-        image_url: `${API_BASE}${item.image_url}`,
-        backendItem: item,
-      }));
+        return {
+          id: backendItem?.id || `static-${index}-${staticItem.name}`,
+          backendId: backendItem?.id || null,
+          name: staticItem.name,
+          image_url: staticItem.image_url,
+          gender: staticItem.gender,
+          category: staticItem.displayCategory,
+          price: Number(staticItem.price || 0),
+          backendItem: backendItem || null,
+        };
+      });
 
     setImages(matched);
 
     if (!matched.some((item) => item.id === selectedItem?.id)) {
       setSelectedItem(null);
     }
-  }, [allClothingOptions, category, gender, selectedItem?.id]);
+  }, [
+    allClothingOptions,
+    staticClothesWithDisplayCategory,
+    category,
+    gender,
+    selectedItem?.id,
+  ]);
 
   const handleUpload = (event) => {
     const file = event.target.files?.[0];
@@ -162,8 +202,15 @@ function TryOn() {
       return;
     }
 
-    if (!selectedItem?.id) {
+    if (!selectedItem) {
       setErrorMessage("Please select one clothing item.");
+      return;
+    }
+
+    if (!selectedItem.backendId) {
+      setErrorMessage(
+        "This clothing item is visible, but it is not available for AI try-on yet. Please refresh the page or check backend clothing options."
+      );
       return;
     }
 
@@ -178,10 +225,11 @@ function TryOn() {
       setLoading(true);
       setErrorMessage("");
       setResult(null);
+      setSelectedSize("");
 
       const formData = new FormData();
       formData.append("file", imageFile);
-      formData.append("clothing_id", String(selectedItem.id));
+      formData.append("clothing_id", String(selectedItem.backendId));
 
       const response = await axios.post(`${API_BASE}/analyze`, formData, {
         headers: {
@@ -191,7 +239,10 @@ function TryOn() {
 
       const data = response.data;
 
-      if (data?.selected_clothing?.id && data.selected_clothing.id !== selectedItem.id) {
+      if (
+        data?.selected_clothing?.id &&
+        data.selected_clothing.id !== selectedItem.backendId
+      ) {
         setErrorMessage(
           "Selected clothing mismatch detected from server response. Please try again."
         );
@@ -230,8 +281,13 @@ function TryOn() {
   const waist = result?.waist_estimate_cm || 0;
   const shoulder = result?.shoulder_width_cm || 0;
 
-  const clothingType = selectedItem?.backendItem?.type || "generic";
-  const clothingId = selectedItem?.id || 1;
+  const clothingType =
+    selectedItem?.category ||
+    selectedItem?.backendItem?.type ||
+    selectedItem?.backendItem?.category ||
+    "generic";
+
+  const clothingId = selectedItem?.backendId || 1;
 
   let score = 0;
 
@@ -246,73 +302,82 @@ function TryOn() {
   else if (waistChestRatio >= 0.35 && waistChestRatio <= 0.7) score += 10;
   else score -= 20;
 
-  if (clothingType === "shirt" || clothingType === "tshirt") {
+  if (
+    clothingType === "shirt" ||
+    clothingType === "tshirt" ||
+    clothingType === "upper_body"
+  ) {
     if (shoulder >= 26 && shoulder <= 55) score += 15;
     else score -= 10;
   }
 
-  if (clothingType === "pants" || clothingType === "skirt") {
+  if (
+    clothingType === "pants" ||
+    clothingType === "skirt" ||
+    clothingType === "lower_body"
+  ) {
     if (waist >= 28 && waist <= 90) score += 15;
     else score -= 10;
   }
 
-  if (clothingType === "dress") {
+  if (clothingType === "dress" || clothingType === "full_body") {
     if (chest > waist && waistChestRatio < 0.65) score += 15;
     else score -= 10;
   }
 
-  score += ((clothingId % 5) - 2) * 6; // -12 to +12
+  score += ((clothingId % 5) - 2) * 6;
 
   const fitScore = Math.max(0, Math.min(100, score + 15));
 
   let status = "";
   let message = "";
   let color = "";
-
   let baseSize = "";
 
   if (
     clothingType === "shirt" ||
     clothingType === "tshirt" ||
     clothingType === "dress" ||
-    clothingType === "skirt"
+    clothingType === "skirt" ||
+    clothingType === "upper_body" ||
+    clothingType === "full_body"
   ) {
-    if (chest < 55) {
-      baseSize = "S";
-    } else if (chest >= 55 && chest < 65) {
-      baseSize = "M";
-    } else if (chest >= 65 && chest < 75) {
-      baseSize = "L";
-    } else {
-      baseSize = "XL";
-    }
+    if (chest < 55) baseSize = "S";
+    else if (chest >= 55 && chest < 65) baseSize = "M";
+    else if (chest >= 65 && chest < 75) baseSize = "L";
+    else baseSize = "XL";
   }
 
-  if (clothingType === "pants") {
-    if (waist < 28) {
-      baseSize = "28";
-    } else if (waist < 30) {
-      baseSize = "30";
-    } else if (waist < 34) {
-      baseSize = "32";
-    } else if (waist < 36) {
-      baseSize = "34";
-    } else {
-      baseSize = "36";
-    }
+  if (clothingType === "pants" || clothingType === "lower_body") {
+    if (waist < 28) baseSize = "28";
+    else if (waist < 30) baseSize = "30";
+    else if (waist < 34) baseSize = "32";
+    else if (waist < 36) baseSize = "34";
+    else baseSize = "36";
+  }
+
+  if (!baseSize && result?.recommended_size) {
+    baseSize = result.recommended_size;
+  }
+
+  if (!baseSize) {
+    baseSize = "S";
   }
 
   if (fitScore >= 70) {
     status = "Excellent Fit";
-    message = "This outfit suits your body shape well and looks balanced overall.";
+    message =
+      "This outfit suits your body shape well and looks balanced overall.";
     color = "green";
   } else if (fitScore >= 45) {
     status = "Moderate Fit";
-    message = "This outfit is an average match. Some areas look good, but others may feel slightly off.";
+    message =
+      "This outfit is an average match. Some areas look good, but others may feel slightly off.";
     color = "yellow";
   } else {
     status = "Poor Fit";
-    message = "This outfit may not suit your body shape well. Trying a different style could give a better result.";
+    message =
+      "This outfit may not suit your body shape well. Trying a different style could give a better result.";
     color = "red";
   }
 
@@ -321,7 +386,7 @@ function TryOn() {
   if (status.includes("Excellent")) {
     recommendation = `Recommended Size: ${baseSize}`;
   } else if (status.includes("Moderate")) {
-    if (clothingType === "pants") {
+    if (clothingType === "pants" || clothingType === "lower_body") {
       const newSize = parseInt(baseSize, 10) + 2;
       recommendation = `Recommended Size: ${newSize}`;
     } else {
@@ -335,37 +400,57 @@ function TryOn() {
       }
     }
   } else {
-    recommendation = "This item may not suit your body well. Try a different size or style.";
+    recommendation =
+      "This item may not suit your body well. Try a different size or style.";
   }
+
+  const recommendedSizeValue = recommendation
+    .replace("Recommended Size:", "")
+    .trim();
+
+  const sizeOptions = SIZE_OPTIONS[clothingType] || ["S", "M", "L", "XL"];
 
   const selectedFeedback = useMemo(() => {
     if (!result) return null;
     return { status, text: message };
   }, [result, status, message]);
 
-  const handleSaveResult = () => {
+  const addToCart = () => {
     if (!result) return;
 
-    let existingHistory = [];
-    try {
-      const parsedHistory = JSON.parse(localStorage.getItem("results_history") || "[]");
-      existingHistory = Array.isArray(parsedHistory) ? parsedHistory : [];
-    } catch {
-      existingHistory = [];
+    if (!selectedSize) {
+      setErrorMessage("Please select your preferred size before adding to cart.");
+      return;
     }
 
-    const resultToSave = {
+    let existingCart = [];
+
+    try {
+      const parsedCart = JSON.parse(localStorage.getItem("cart") || "[]");
+      existingCart = Array.isArray(parsedCart) ? parsedCart : [];
+    } catch {
+      existingCart = [];
+    }
+
+    const cartItem = {
       ...result,
-      match_status: selectedFeedback?.status || "Bad Match ",
+      selected_clothing: result.selected_clothing || selectedItem?.backendItem,
+      cloth_name: selectedItem?.name || "Fashion Item",
+      cloth_category: selectedItem?.category || clothingType,
+      match_status: selectedFeedback?.status || "Good Fit",
       feedback_text:
         selectedFeedback?.text ||
-        "This clothing does not match your body shape well. A different style may suit you better.",
+        "This clothing item matches your body shape well and gives a balanced appearance.",
       recommendation,
+      recommended_size: recommendedSizeValue,
+      selected_size: selectedSize,
+      price: Number(selectedItem?.price || 0),
+      added_at: new Date().toISOString(),
     };
 
-    const updatedHistory = [resultToSave, ...existingHistory];
-    localStorage.setItem("results_history", JSON.stringify(updatedHistory));
-    navigate("/results");
+    const updatedCart = [cartItem, ...existingCart];
+    localStorage.setItem("cart", JSON.stringify(updatedCart));
+    navigate("/cart");
   };
 
   return (
@@ -421,12 +506,18 @@ function TryOn() {
                 setSelectedItem(null);
                 setImages([]);
                 setResult(null);
+                setSelectedSize("");
                 setErrorMessage("");
               }}
             >
               <option value="">Select Gender</option>
-              <option value="male">Male</option>
-              <option value="female">Female</option>
+              {[...new Set(staticClothesWithDisplayCategory.map((item) => item.gender))].map(
+                (itemGender) => (
+                  <option key={itemGender} value={itemGender}>
+                    {itemGender}
+                  </option>
+                )
+              )}
             </select>
 
             <label className="block mb-2 text-sm font-medium text-slate-700">
@@ -441,6 +532,7 @@ function TryOn() {
                 setCategory(e.target.value);
                 setSelectedItem(null);
                 setResult(null);
+                setSelectedSize("");
                 setErrorMessage("");
               }}
             >
@@ -471,7 +563,7 @@ function TryOn() {
             </p>
           ) : images.length === 0 ? (
             <p className="text-slate-600">
-              No matching static items found for this category. Please check clothing options.
+              No matching clothing items found for this category.
             </p>
           ) : (
             <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
@@ -482,6 +574,7 @@ function TryOn() {
                   onClick={() => {
                     setSelectedItem(item);
                     setResult(null);
+                    setSelectedSize("");
                     setErrorMessage("");
                   }}
                   className={`relative h-[210px] p-2 border rounded-lg transition ${
@@ -497,7 +590,11 @@ function TryOn() {
                   />
 
                   <span className="absolute px-2 py-1 text-xs font-semibold rounded top-2 left-2 bg-slate-900 text-slate-100">
-                    ID: {item.id}
+                    {item.backendId ? `ID: ${item.backendId}` : "New"}
+                  </span>
+
+                  <span className="absolute px-2 py-1 text-xs font-semibold text-green-700 rounded bottom-2 left-2 bg-green-100">
+                    Rs. {Number(item.price || 0).toFixed(2)}
                   </span>
                 </button>
               ))}
@@ -530,7 +627,8 @@ function TryOn() {
                 />
               ) : (
                 <p className="text-slate-600">
-                  No preview image generated. Please ensure body landmarks are visible in your photo.
+                  No preview image generated. Please ensure body landmarks are
+                  visible in your photo.
                 </p>
               )}
             </div>
@@ -574,13 +672,6 @@ function TryOn() {
                 className="w-full px-4 py-2 mb-6 text-sm font-medium text-white transition rounded-lg bg-slate-700 hover:bg-slate-800"
               >
                 View 2D Preview
-              </button>
-
-              <button
-                onClick={handleSaveResult}
-                className="w-full px-4 py-2 mb-6 text-sm font-medium text-white transition rounded-lg bg-slate-900 hover:bg-slate-800"
-              >
-                Save Result
               </button>
 
               <div
@@ -635,7 +726,42 @@ function TryOn() {
                     </p>
                   </div>
                 )}
+
+                <div className="p-3 mt-3 border border-green-300 rounded bg-green-50">
+                  <p className="text-sm font-semibold text-green-800">
+                    Price: Rs. {Number(selectedItem?.price || 0).toFixed(2)}
+                  </p>
+                </div>
               </div>
+
+              <div className="mt-6">
+                <label className="block mb-2 text-sm font-semibold text-slate-700">
+                  Choose Your Size
+                </label>
+
+                <select
+                  value={selectedSize}
+                  onChange={(e) => {
+                    setSelectedSize(e.target.value);
+                    setErrorMessage("");
+                  }}
+                  className="w-full p-3 border rounded-lg border-slate-300 focus:outline-none focus:ring-2 focus:ring-slate-900"
+                >
+                  <option value="">Select Size</option>
+                  {sizeOptions.map((size) => (
+                    <option key={size} value={size}>
+                      {size}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <button
+                onClick={addToCart}
+                className="w-full px-4 py-3 mt-6 text-sm font-semibold text-white transition rounded-lg bg-slate-900 hover:bg-slate-800"
+              >
+                Add to Cart
+              </button>
             </div>
           </div>
         )}

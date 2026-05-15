@@ -26,6 +26,7 @@ API_URL = f"https://{RAPIDAPI_HOST}/results"
 
 SEXES = {"male", "female"}
 CATEGORIES = {"upper_body", "lower_body", "full_body"}
+IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".webp"}
 
 
 def parse_path(path: Path):
@@ -48,26 +49,35 @@ def list_available_clothing():
     items = []
     idx = 1
 
-    for path in CLOTHING_DIR.rglob("*.png"):
+    if not CLOTHING_DIR.exists():
+        return items
+
+    for path in sorted(CLOTHING_DIR.rglob("*")):
         if not path.is_file():
+            continue
+
+        if path.suffix.lower() not in IMAGE_EXTENSIONS:
             continue
 
         p_sex, p_category, p_type = parse_path(path.parent)
 
-        if not p_type:
+        if not p_sex or not p_category:
             continue
 
+        clothing_type = p_type or p_category
         name = path.stem
 
-        items.append({
-            "id": idx,
-            "key": f"{p_sex}|{p_type}|{name}",
-            "sex": p_sex,
-            "type": p_type,
-            "category": p_category,
-            "name": name.replace("-", " ").title(),
-            "image_url": f"/static/clothing_pngs/{path.relative_to(CLOTHING_DIR).as_posix()}",
-        })
+        items.append(
+            {
+                "id": idx,
+                "key": f"{p_sex}|{clothing_type}|{name}",
+                "sex": p_sex,
+                "type": clothing_type,
+                "category": p_category,
+                "name": name.replace("-", " ").replace("_", " ").title(),
+                "image_url": f"/static/clothing_pngs/{path.relative_to(CLOTHING_DIR).as_posix()}",
+            }
+        )
 
         idx += 1
 
@@ -105,7 +115,9 @@ def generate_overlay(
         print("API4AI ERROR: RAPIDAPI_KEY or RAPIDAPI_HOST missing")
         return None
 
-    relative_path = selected_item["image_url"].replace("/static/clothing_pngs/", "")
+    relative_path = selected_item["image_url"].replace(
+        "/static/clothing_pngs/", ""
+    )
     clothing_path = CLOTHING_DIR / relative_path
 
     if not clothing_path.exists():
@@ -139,6 +151,10 @@ def generate_overlay(
         result = response.json()
 
         base64_img = result["results"][0]["entities"][0]["image"]
+
+        if "," in base64_img:
+            base64_img = base64_img.split(",", 1)[1]
+
         output_bytes = base64.b64decode(base64_img)
 
         OUTPUT_DIR.mkdir(parents=True, exist_ok=True)

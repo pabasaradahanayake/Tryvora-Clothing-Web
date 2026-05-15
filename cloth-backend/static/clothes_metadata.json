@@ -1,0 +1,23 @@
+{
+  "male/upper_body/try_on_image_shirt.jpeg": {
+    "price": 3499.0
+  },
+  "male/upper_body/try_on_image_shirt_4.jpeg": {
+    "price": 3200.0
+  },
+  "male/upper_body/try_on_image_shirt_6.jpeg": {
+    "price": 4999.0
+  },
+  "male/upper_body/shirt/shirt_0.png": {
+    "price": 4100.0
+  },
+  "male/upper_body/shirt/shirt_1.png": {
+    "price": 3400.0
+  },
+  "female/lower_body/try_on_skirt_1.jpeg": {
+    "price": 4000.0
+  },
+  "female/lower_body/try_on_skirt_5.jpeg": {
+    "price": 6500.0
+  }
+}

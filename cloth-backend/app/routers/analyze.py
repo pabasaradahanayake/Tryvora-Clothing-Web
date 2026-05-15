@@ -44,6 +44,8 @@ async def get_clothes(
     category: str | None = Query(None),
     clothing_type: str | None = Query(None),
 ):
+    # Clear cache so newly uploaded clothes from admin dashboard are included
+    cached_clothing.cache_clear()
     items = cached_clothing()
 
     if sex:
@@ -100,6 +102,10 @@ async def analyze(
 
     if clothing_id is not None:
         selected_item = get_clothing_by_id(clothing_id)
+
+        if not selected_item:
+            cached_clothing.cache_clear()
+            selected_item = get_clothing_by_id(clothing_id)
 
     if not selected_item:
         raise HTTPException(

@@ -16,7 +16,9 @@ import HowItWorks from "./pages/HowItWorks";
 import Contact from "./pages/Contact";
 
 import TryOn from "./pages/TryOn";
-import MyResults from "./pages/MyResults";
+import Cart from "./pages/Cart";
+import Checkout from "./pages/Checkout";
+import MyOrders from "./pages/MyOrders";
 import MyMessages from "./pages/MyMessages";
 
 import AdminLayout from "./pages/admin/AdminLayout";
@@ -42,6 +44,7 @@ function App() {
               <h1 className="text-xl font-bold tracking-tight text-gray-900">
                 Tryvora Admin Dashboard
               </h1>
+
               <p className="text-xs font-medium text-gray-500">
                 Manage clothing, users, messages, and settings
               </p>
@@ -84,7 +87,9 @@ function App() {
           <Route element={<ProtectedRoute />}>
             <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/tryon" element={<TryOn />} />
-            <Route path="/results" element={<MyResults />} />
+            <Route path="/cart" element={<Cart />} />
+            <Route path="/checkout" element={<Checkout />} />
+            <Route path="/my-orders" element={<MyOrders />} />
             <Route path="/contact" element={<Contact />} />
             <Route path="/my-messages" element={<MyMessages />} />
           </Route>

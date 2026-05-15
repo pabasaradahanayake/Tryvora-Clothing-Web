@@ -1,4 +1,5 @@
 import { Link, useLocation, useNavigate } from "react-router-dom";
+import { ShoppingBag } from "lucide-react";
 
 function Navbar() {
   const location = useLocation();
@@ -6,6 +7,8 @@ function Navbar() {
 
   const token = localStorage.getItem("token");
   const adminToken = localStorage.getItem("admin_token");
+
+  const cartItems = JSON.parse(localStorage.getItem("cart") || "[]");
 
   const isActive = (path) =>
     location.pathname === path
@@ -19,22 +22,20 @@ function Navbar() {
   };
 
   return (
-    <nav
-      className="fixed top-0 left-0 z-50 w-full bg-white shadow-sm"
-    >
-      <div className="flex items-center justify-between px-8 py-3 mx-auto max-w-7xl">
+    <nav className="fixed top-0 left-0 z-50 w-full border-b border-gray-200 bg-white/90 backdrop-blur-xl shadow-sm">
+      <div className="flex items-center justify-between px-8 py-4 mx-auto max-w-7xl">
         {/* LEFT SIDE - LOGO */}
         <div className="flex items-center">
           <Link
             to={adminToken ? "/admin" : token ? "/dashboard" : "/"}
-            className="flex items-center gap-3 text-3xl font-bold tracking-widest text-black"
+            className="flex items-center gap-3 text-3xl font-black tracking-wider text-black transition hover:opacity-80"
           >
             Tryvora
           </Link>
         </div>
 
         {/* CENTER - NAV PAGES */}
-        <div className="flex items-center gap-10 text-base font-medium">
+        <div className="flex items-center gap-10 text-[15px] font-medium">
           {/* PUBLIC NAV */}
           {!token && !adminToken && (
             <>
@@ -73,10 +74,29 @@ function Navbar() {
               </Link>
 
               <Link
-                to="/results"
-                className={`transition ${isActive("/results")}`}
+                to="/cart"
+                className={`transition flex items-center gap-2 ${isActive(
+                  "/cart"
+                )}`}
               >
-                My Results
+                <div className="relative">
+                  <ShoppingBag size={18} />
+
+                  {cartItems.length > 0 && (
+                    <span className="absolute -top-2 -right-2 flex items-center justify-center min-w-[18px] h-[18px] px-1 text-[10px] font-bold text-white bg-red-500 rounded-full">
+                      {cartItems.length}
+                    </span>
+                  )}
+                </div>
+
+                Cart
+              </Link>
+
+              <Link
+                to="/my-orders"
+                className={`transition ${isActive("/my-orders")}`}
+              >
+                My Orders
               </Link>
 
               <Link
@@ -114,14 +134,14 @@ function Navbar() {
             <>
               <Link
                 to="/login"
-                className="font-medium text-gray-700 hover:text-black"
+                className="font-medium text-gray-700 transition hover:text-black"
               >
                 Login
               </Link>
 
               <Link
                 to="/register"
-                className="px-6 py-2.5 rounded-full bg-black text-white hover:bg-gray-900 transition"
+                className="px-6 py-2.5 rounded-full bg-black text-white hover:bg-gray-900 transition shadow-lg"
               >
                 Register
               </Link>
@@ -131,7 +151,7 @@ function Navbar() {
           {(token || adminToken) && (
             <button
               onClick={handleLogout}
-              className="px-6 py-2.5 text-white transition bg-red-500 rounded-full hover:bg-red-600"
+              className="px-6 py-2.5 text-sm font-semibold text-white transition bg-red-500 rounded-full shadow-md hover:bg-red-600"
             >
               Logout
             </button>

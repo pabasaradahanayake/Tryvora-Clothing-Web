@@ -1,6 +1,7 @@
 from contextlib import asynccontextmanager
 from pathlib import Path
 import shutil
+import json
 
 from fastapi import FastAPI, File, Form, UploadFile, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -16,8 +17,27 @@ from app.routers.admin import router as admin_router
 STATIC_DIR = Path(__file__).resolve().parent.parent / "static"
 OUTPUT_DIR = STATIC_DIR / "output"
 CLOTHING_DIR = STATIC_DIR / "clothing_pngs"
+CLOTHES_METADATA_FILE = STATIC_DIR / "clothes_metadata.json"
 
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+STATIC_DIR.mkdir(parents=True, exist_ok=True)
+
+
+def load_clothes_metadata():
+    if not CLOTHES_METADATA_FILE.exists():
+        return {}
+
+    try:
+        with CLOTHES_METADATA_FILE.open("r", encoding="utf-8") as file:
+            data = json.load(file)
+            return data if isinstance(data, dict) else {}
+    except Exception:
+        return {}
+
+
+def save_clothes_metadata(metadata: dict):
+    with CLOTHES_METADATA_FILE.open("w", encoding="utf-8") as file:
+        json.dump(metadata, file, indent=2)
 
 
 # ── Lifespan ──────────────────────────────────────────────────────────────────
@@ -91,6 +111,7 @@ app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 @app.get("/clothes")
 def get_clothes():
     clothes = []
+    metadata = load_clothes_metadata()
 
     if not CLOTHING_DIR.exists():
         return clothes
@@ -103,6 +124,8 @@ def get_clothes():
             gender = parts[0] if len(parts) > 0 else "unknown"
             category = parts[1] if len(parts) > 1 else "unknown"
 
+            item_metadata = metadata.get(relative_path, {})
+
             clothes.append(
                 {
                     "name": file.name,
@@ -110,6 +133,7 @@ def get_clothes():
                     "category": category,
                     "image_url": f"http://127.0.0.1:8000/static/clothing_pngs/{relative_path}",
                     "path": relative_path,
+                    "price": item_metadata.get("price", 0),
                 }
             )
 
@@ -120,6 +144,7 @@ def get_clothes():
 async def upload_cloth(
     gender: str = Form(...),
     category: str = Form(...),
+    price: float = Form(0),
     file: UploadFile = File(...),
 ):
     allowed_extensions = [".png", ".jpg", ".jpeg", ".webp"]
@@ -129,6 +154,12 @@ async def upload_cloth(
         raise HTTPException(
             status_code=400,
             detail="Only PNG, JPG, JPEG, and WEBP files are allowed.",
+        )
+
+    if price < 0:
+        raise HTTPException(
+            status_code=400,
+            detail="Price cannot be negative.",
         )
 
     safe_gender = gender.strip().lower().replace(" ", "_")
@@ -151,6 +182,12 @@ async def upload_cloth(
 
     relative_path = save_path.relative_to(CLOTHING_DIR).as_posix()
 
+    metadata = load_clothes_metadata()
+    metadata[relative_path] = {
+        "price": price,
+    }
+    save_clothes_metadata(metadata)
+
     return {
         "message": "Clothing image uploaded successfully",
         "name": save_path.name,
@@ -158,6 +195,38 @@ async def upload_cloth(
         "category": safe_category,
         "image_url": f"http://127.0.0.1:8000/static/clothing_pngs/{relative_path}",
         "path": relative_path,
+        "price": price,
+    }
+
+
+@app.put("/clothes/price")
+def update_cloth_price(path: str = Form(...), price: float = Form(...)):
+    if not path:
+        raise HTTPException(status_code=400, detail="Image path is required.")
+
+    if price < 0:
+        raise HTTPException(status_code=400, detail="Price cannot be negative.")
+
+    target_path = (CLOTHING_DIR / path).resolve()
+    clothing_root = CLOTHING_DIR.resolve()
+
+    if not str(target_path).startswith(str(clothing_root)):
+        raise HTTPException(status_code=400, detail="Invalid image path.")
+
+    if not target_path.exists() or not target_path.is_file():
+        raise HTTPException(status_code=404, detail="Clothing image not found.")
+
+    metadata = load_clothes_metadata()
+    metadata[path] = {
+        **metadata.get(path, {}),
+        "price": price,
+    }
+    save_clothes_metadata(metadata)
+
+    return {
+        "message": "Clothing price updated successfully",
+        "path": path,
+        "price": price,
     }
 
 
@@ -176,6 +245,11 @@ def delete_cloth(path: str):
         raise HTTPException(status_code=404, detail="Clothing image not found.")
 
     target_path.unlink()
+
+    metadata = load_clothes_metadata()
+    if path in metadata:
+        del metadata[path]
+        save_clothes_metadata(metadata)
 
     return {"message": "Clothing image deleted successfully"}
 
